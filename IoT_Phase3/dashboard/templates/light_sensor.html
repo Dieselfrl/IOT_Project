@@ -85,109 +85,10 @@
             box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
         }
 
-        .base::before {
-            content: '';
-            display: block;
-            width: 100%;
-            height: 30%;
-            background: #666;
-            margin-top: 10%;
-        }
-
-        /* Toggle Switch */
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 80px;
-            height: 40px;
-            margin: 20px 0;
-        }
-
-        .switch input {
-            display: none;
-        }
-
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #ccc;
-            transition: 0.4s;
-            border-radius: 40px;
-            border: 2px solid #ecf0f1;
-        }
-
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 36px;
-            width: 36px;
-            left: 2px;
-            bottom: 2px;
-            background-color: white;
-            transition: 0.4s;
-            border-radius: 50%;
-            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
-        }
-
-        input:checked + .slider {
-            background-color: #3498db;
-        }
-
-        input:checked + .slider:before {
-            transform: translateX(40px);
-        }
-
+        /* Status Section */
         .status {
             margin-top: 15px;
-            font-size: 1.2em;
-        }
-
-        /* Range Slider */
-        .slider-container {
-            margin-top: 20px;
-            text-align: left;
-        }
-
-        .slider-label {
-            color: #ecf0f1;
-            margin-bottom: 10px;
-            font-size: 1rem;
-            font-weight: bold;
-        }
-
-        input[type="range"] {
-            width: 100%;
-            margin: 20px 0;
-            -webkit-appearance: none;
-            background: #ccc;
-            height: 10px;
-            border-radius: 5px;
-            outline: none;
-            border: 2px solid #ecf0f1;
-        }
-
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 20px;
-            height: 20px;
-            background: #1abc9c;
-            cursor: pointer;
-            border-radius: 50%;
-            border: 2px solid #ecf0f1;
-        }
-
-        input[type="range"]::-moz-range-thumb {
-            width: 20px;
-            height: 20px;
-            background: #1abc9c;
-            cursor: pointer;
-            border-radius: 50%;
-            border: 2px solid #ecf0f1;
+            font-size: 1.2rem;
         }
     </style>
 </head>
@@ -197,61 +98,63 @@
         <h1>Light Intensity Control Dashboard</h1>
 
         <div class="widget">
-            <h2>Lightbulb Control</h2>
+            <h2>Lightbulb Status</h2>
             <div class="lightbulb">
                 <div class="bulb" id="bulb"></div>
                 <div class="base"></div>
             </div>
-            <label class="switch">
-                <input type="checkbox" id="ledToggle" onclick="toggleLED()">
-                <span class="slider"></span>
-            </label>
-            <p id="ledStatus" class="status">LED is Off</p>
+            <p id="ledStatus" class="status">Loading...</p>
         </div>
 
         <div class="widget">
-            <h2>Adjust Intensity</h2>
-            <div class="slider-container">
-                <label class="slider-label" for="intensitySlider">Intensity Slider:</label>
-                <input type="range" min="0" max="4095" id="intensitySlider" oninput="updateIntensity(this.value)">
-            </div>
-            <p>Current Intensity: <span id="intensityValue">0</span></p>
+            <h2>Light Intensity</h2>
+            <p id="lightIntensity" class="status">Loading...</p>
+        </div>
+
+        <div class="widget">
+            <h2>Email Notification</h2>
+            <p id="emailNotification" class="status">Loading...</p>
         </div>
     </div>
 
     <script>
-        let isLedOn = false;
+        const bulb = document.getElementById('bulb');
+        const ledStatus = document.getElementById('ledStatus');
+        const lightIntensity = document.getElementById('lightIntensity');
+        const emailNotification = document.getElementById('emailNotification');
 
-        function toggleLED() {
-            const ledToggle = document.getElementById('ledToggle');
-            const ledStatus = document.getElementById('ledStatus');
-            const bulb = document.getElementById('bulb');
+        // Function to update the dashboard
+        const updateDashboard = (data) => {
+            // Update light intensity
+            lightIntensity.textContent = `Intensity: ${data.lightIntensity}`;
 
-            isLedOn = ledToggle.checked;
-
-            if (isLedOn) {
-                ledStatus.innerText = "LED is On";
-                updateIntensity(document.getElementById('intensitySlider').value);
+            // Update LED status
+            if (data.lightStatus) {
+                bulb.classList.add('on');
+                ledStatus.textContent = "LED is On";
             } else {
-                ledStatus.innerText = "LED is Off";
-                bulb.style.backgroundColor = '#ccc';
-                bulb.style.boxShadow = 'none';
+                bulb.classList.remove('on');
+                ledStatus.textContent = "LED is Off";
             }
-        }
 
-        function updateIntensity(value) {
-            const intensityValue = document.getElementById('intensityValue');
-            const bulb = document.getElementById('bulb');
+            // Update email notification
+            emailNotification.textContent = data.emailSent
+                ? "Email Sent"
+                : "Email Not Sent";
+        };
 
-            intensityValue.innerText = value;
-
-            if (isLedOn) {
-                const brightness = Math.min(Math.max(value / 4095, 0), 1);
-                const color = brightness > 0.5 ? `rgb(241, 196, 15)` : `rgb(255, 255, 224)`;
-                bulb.style.backgroundColor = color;
-                bulb.style.boxShadow = `0 0 ${40 * brightness}px ${color}`;
-            }
-        }
+        // Fetch data from the backend every second
+        setInterval(() => {
+            fetch('/data')
+                .then((response) => response.json())
+                .then(updateDashboard)
+                .catch((error) => {
+                    console.error("Error fetching data:", error);
+                    lightIntensity.textContent = "Error fetching data";
+                    ledStatus.textContent = "Error fetching data";
+                    emailNotification.textContent = "Error fetching data";
+                });
+        }, 1000);
     </script>
 </body>
 
