@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, jsonify
 import paho.mqtt.client as mqtt
 import smtplib
 from email.mime.text import MIMEText
@@ -9,7 +9,7 @@ import time
 app = Flask(__name__)
 
 # MQTT Configuration
-MQTT_BROKER = "put mqtt server ip"
+MQTT_BROKER = "192.168.171.150"
 MQTT_TOPIC = "light/data"
 
 # Global Variables
@@ -55,6 +55,7 @@ def on_message(client, userdata, message):
         led_status = "OFF"
         email_sent = False
 
+
 def mqtt_thread():
     client = mqtt.Client()
     client.on_message = on_message
@@ -70,8 +71,16 @@ mqtt_thread_instance.start()
 
 @app.route('/')
 def dashboard():
-
     return render_template('light_sensor.html')
+
+# Added `/data` route for real-time data
+@app.route('/data', methods=['GET'])
+def get_data():
+    return jsonify({
+        "lightIntensity": light_intensity,
+        "ledStatus": led_status,
+        "emailSent": email_sent
+    })
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0')

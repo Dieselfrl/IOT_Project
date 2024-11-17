@@ -123,17 +123,19 @@
         const lightIntensity = document.getElementById('lightIntensity');
         const emailNotification = document.getElementById('emailNotification');
 
+        const THRESHOLD = 400; // Define your light intensity threshold
+
         // Function to update the dashboard
         const updateDashboard = (data) => {
             // Update light intensity
             lightIntensity.textContent = `Intensity: ${data.lightIntensity}`;
 
-            // Update LED status
-            if (data.lightStatus) {
-                bulb.classList.add('on');
+            // Check if the light intensity is below or equal to the threshold
+            if (data.lightIntensity <= THRESHOLD) {
+                bulb.classList.add('on'); // Turn the lightbulb ON
                 ledStatus.textContent = "LED is On";
             } else {
-                bulb.classList.remove('on');
+                bulb.classList.remove('on'); // Turn the lightbulb OFF
                 ledStatus.textContent = "LED is Off";
             }
 
