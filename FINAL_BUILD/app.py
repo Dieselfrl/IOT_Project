@@ -1,12 +1,17 @@
+from flask import Flask, render_template, jsonify, request
 import paho.mqtt.client as mqtt
 import RPi.GPIO as GPIO
 from threading import Thread, Lock
-import smtplib
+import smtplib, ssl
+import imaplib, email
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import re
 import sqlite3
 import time
+from Freenove_DHT import DHT
 
+app = Flask(__name__)
 thread_lock = Lock()
 
 conn = sqlite3.connect("users.db", check_same_thread=False)
@@ -28,18 +33,30 @@ MQTT_TOPIC = "card/scanned"
 #global varriables/user presets
 LIGHT_INTENSITY = 0
 TEMPERATURE_INTENSITY = 0
+
+#DHT SETUP + MOTOR
+DHTPin = 17
+current_temperature = 0
+current_humidity = 0
+fan_status = False
+Motor1, Motor2, Motor3 = 22, 27, 17  
+
 isLogged = False
 led_status = "OFF"
 email_sent = False
 
 #LED settings
 LED_PIN = 18
+light_intensity = 0
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(LED_PIN, GPIO.OUT)
 
 EMAIL = 'stevenbeaven234@gmail.com'
 EMAIL_PASSWORD = 'bfic leud wpdi xkki'
 RECIPIENT_EMAIL = "stevenbeaven234@gmail.com"
+IMAP_SERVER = "imap.gmail.com"
+
+rfidUser = ""
 
 #Get user by UID
 def getUserByUID(uid):
@@ -88,6 +105,83 @@ def send_email(body):
     finally:
         server.quit()
 
+#check for email response
+def check_for_response():
+    print("Checking for response in the inbox...")
+    mail = imaplib.IMAP4_SSL(IMAP_SERVER)
+    mail.login(EMAIL, EMAIL_PASSWORD)
+    mail.select("inbox")
+    status, messages = mail.search(None, 'ALL')
+    mail_ids = messages[0].split()
+    for i in reversed(mail_ids[-10:]):  # Only check the last 10 emails for efficiency
+        status, msg_data = mail.fetch(i, '(RFC822)')
+        for part in msg_data:
+            if isinstance(part, tuple):
+                msg = email.message_from_bytes(part[1])
+                print("Email received from: %s", msg['From'])
+                print("Email subject: %s", msg['Subject'])
+                subject = msg['Subject'] or ""
+                if re.search(r"\bTemperature Alert\b", subject, re.IGNORECASE):
+                    content = ""
+                    if msg.is_multipart():
+                        for payload in msg.get_payload():
+                            if payload.get_content_type() == 'text/plain':
+                                content = payload.get_payload(decode=True).decode().strip()
+                    else:
+                        content = msg.get_payload(decode=True).decode().strip()
+                    print("Full email body read: %s", content)
+                    first_line = content.splitlines()[0].strip().upper()
+                    if first_line == "YES":
+                        return True
+                    else:
+                        print("Received response, but not 'YES'. Fan remains OFF.")
+                        return False
+    print("No relevant response found in inbox.")
+    return False
+
+#Motor control
+def control_fan(turn_on):
+    global fan_status
+    if turn_on:
+        GPIO.output(Motor1, GPIO.HIGH)
+        GPIO.output(Motor2, GPIO.LOW)
+        GPIO.output(Motor3, GPIO.HIGH)
+        fan_status = True
+        print("Fan is ON.")
+    else:
+        GPIO.output(Motor1, GPIO.LOW)
+        GPIO.output(Motor2, GPIO.LOW)
+        GPIO.output(Motor3, GPIO.LOW)
+        fan_status = False
+        print("Fan is OFF.")
+
+#runtime loop method for dht11
+def monitor_temperature():
+    global current_temperature, current_humidity
+    alert_sent = False
+    while True:
+        chk = dht.readDHT11()
+        if chk == 0:
+            current_temperature = dht.getTemperature()
+            current_humidity = dht.getHumidity()
+            print(f"Temperature: {current_temperature}°C, Humidity: {current_humidity}%")
+            if current_temperature > TEMPERATURE_INTENSITY:
+                if not alert_sent or (not fan_status and not check_for_response()):
+                    send_email("Temperature Alert", f"The current temperature is {current_temperature}°C. Would you like to turn on the fan? Reply YES or NO.")
+                    alert_sent = True
+                    print("Temperature email sent. Waiting for user response...")
+                if check_for_response():
+                    print("User responded 'YES'. Turning on the fan.")
+                    control_fan(True)
+                    #alert_sent = False
+                else:
+                    print("User did not respond 'YES' or fan remains OFF. Re-sending email in 10 seconds.")
+                    time.sleep(10)
+            else:
+                alert_sent = False
+                control_fan(False)
+        time.sleep(2)
+
 #Mqtt callback method (handle UID)
 def on_message(client, userdata, message):
     
@@ -96,28 +190,30 @@ def on_message(client, userdata, message):
         uid = message.payload.decode()
         print(uid)
         user = getUserByUID(uid)
-        body = ""
         if user is None:
             #take presets and set the global varriables
             insert_user(uid,400,400)
             print(f"User {uid} was created")
             user = getUserByUID(uid)
-            body = f"{uid} has created account {time.strftime('%H:%M')}. "
         
-        global LIGHT_INTENSITY, TEMPERATURE_INTENSITY, isLogged
+        global LIGHT_INTENSITY, TEMPERATURE_INTENSITY, isLogged, light_intensity
         isLogged = True
         LIGHT_INTENSITY = user[2]
         TEMPERATURE_INTENSITY = user[3]
         print(f"Light intensity set to: {LIGHT_INTENSITY} | Temperature intensity set to: {TEMPERATURE_INTENSITY}")
+        rfidUser = uid
         body = f"{uid} has signed in at {time.strftime('%H:%M')}."
         send_email(body)
     elif message.topic == "room/light":
         #Verify if a user was logged in
         if isLogged:
+            #start checking dht11
+            temperature = Thread(targer=monitor_temperature)
+            temperature.start()
             global email_sent, led_status
             light_intensity = int(message.payload.decode())
             if light_intensity < LIGHT_INTENSITY:
-                GPIO.output(LED_PIN, GPIO.HIGH) 
+                GPIO.output(LED_PIN, GPIO.HIGH)
                 if not email_sent:
                     body = f"The Light is ON at {time.strftime('%H:%M')}."
                     send_email(body)
@@ -138,3 +234,31 @@ def mqtt_thread():
 
 mqtt_thread_instance = Thread(target=mqtt_thread)
 mqtt_thread_instance.start()
+
+@app.route('/')
+def index():
+    return "Welcome to IOT PROJECT!"
+
+@app.route('/data')
+def data():
+    print(f"Temperature: {current_temperature}")
+    print(f"Light Intensity: {light_intensity}")
+    print(f"LED Status: {led_status}")
+    print(f"Humidity: {current_humidity}")
+    print(f"Fan Status: {fan_status}")
+    print(f"RFID User: {rfidUser}")
+
+    return jsonify({
+        "temperature": current_temperature,
+        "lightIntensity": light_intensity,
+        "ledStatus": led_status,
+        "humidity": current_humidity,
+        "fanStatus": fan_status,
+        "rfidUser": rfidUser
+    })
+
+if __name__ == '__main__':
+    try:
+        app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=False)
+    except KeyboardInterrupt:
+        print("Shutting down...")
