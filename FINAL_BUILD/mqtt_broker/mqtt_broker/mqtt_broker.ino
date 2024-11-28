@@ -12,8 +12,13 @@ MFRC522 rfid(SS_PIN, RST_PIN);  //Instance card reader RFID-RC522
 const char* ssid = "";
 const char* password = "";
 const char* mqtt_server = "";
+
 WiFiClient espClient;
 PubSubClient client(espClient);
+
+//Photoresistor
+const int photoPin = 32;
+int lightLevel;
 
 void setup() {
   Serial.begin(115200);                 //Instantiate serial interface
@@ -41,13 +46,23 @@ void setup_wifi() {
   Serial.println(WiFi.localIP());
 }
 
+void lightLevelTrigger() {
+  lightLevel = analogRead(photoPin);
+  Serial.print("Light level: ");
+  Serial.println(lightLevel);
+
+  char message[50];
+  snprintf(message, 50, "%d", lightLevel);
+  client.publish("room/light", message);
+  delay(1000);
+}
+
 //Connect to MQTT server
 void reconnect() {
   while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
     if (client.connect("vanieriot")) {
       Serial.println("connected");
-      client.subscribe("room/light");
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -63,7 +78,7 @@ void loop() {
     reconnect();
   }
   client.loop();
-
+  lightLevelTrigger();
   if (!rfid.PICC_IsNewCardPresent()) {
     return;
   }
@@ -72,7 +87,7 @@ void loop() {
     return;
   }
 
-  char uidHex[20] = ""; 
+  char uidHex[20] = "";
   for (byte i = 0; i < rfid.uid.size; i++) {
     snprintf(uidHex + strlen(uidHex), sizeof(uidHex) - strlen(uidHex), "%02X", rfid.uid.uidByte[i]);
   }
