@@ -126,16 +126,15 @@
             width: 100px;
             margin-top: 20px;
             margin-bottom: 10px;
-            transition: transform 0.3s ease;
-        }
-
-        .fan-image.on {
-            animation: spin 1s linear infinite;
         }
 
         .fan-image img {
             width: 100%;
             height: auto;
+        }
+
+        .fan-image.on img {
+            animation: spin 1s linear infinite;
         }
 
         @keyframes spin {
@@ -292,7 +291,6 @@
 <body>
     <div class="container">
         <h1>Smart Home IoT Dashboard</h1>
-
         <div class="profile-container">
             <div class="profile-picture" id="profilePicture"></div>
             <div class="profile-info">
@@ -301,7 +299,6 @@
                 <p id="lightThreshold">Light Intensity Threshold: Loading...</p>
             </div>
         </div>
-
         <div class="dashboard-container">
             <div class="widget">
                 <h2>Lightbulb Status</h2>
@@ -312,19 +309,17 @@
                 <p id="ledStatus" class="status">Loading...</p>
                 <p id="lightIntensity" class="status">Intensity: Loading...</p>
             </div>
-
             <div class="widget">
                 <h2>Fan Control</h2>
-                <div class="fan-image">
-                    <img src="/static/fan.png" id="fanImage" alt="Fan">
+                <div class="fan-image" id="fanImage">
+                    <img src="/static/fan.png" alt="Fan">
                 </div>
                 <label class="switch">
-                    <input type="checkbox" id="fanToggle" onclick="toggleFan()">
+                    <input type="checkbox" id="fanToggle">
                     <span class="slider"></span>
                 </label>
                 <div id="fanStatus" class="status">Fan is Off</div>
             </div>
-
             <div class="widget">
                 <h2>Temperature (&#8451;)</h2>
                 <div class="thermometer-container">
@@ -339,13 +334,11 @@
                     </div>
                 </div>
             </div>
-
             <div class="widget">
                 <h2>Humidity (%)</h2>
                 <div id="humidityGauge" class="gauge-display large"></div>
             </div>
         </div>
-
         <div class="threshold-input">
             <h3>Set Thresholds</h3>
             <label for="lightThresholdInput">Light Intensity Threshold:</label>
@@ -355,10 +348,9 @@
             <button onclick="updateThresholds()">Update Thresholds</button>
         </div>
     </div>
-
     <script>
         let lightThreshold = 400; // Default light intensity threshold
-        let tempThreshold = 25; // Default temperature threshold
+        let tempThreshold = 18; // Default temperature threshold
 
         const bulb = document.getElementById('bulb');
         const ledStatus = document.getElementById('ledStatus');
