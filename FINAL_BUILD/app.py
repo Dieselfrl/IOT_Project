@@ -58,6 +58,9 @@ IMAP_SERVER = "imap.gmail.com"
 
 rfidUser = ""
 
+temperature_thread = None
+is_monitoring = False
+
 #Get user by UID
 def getUserByUID(uid):
     with thread_lock:
@@ -107,37 +110,37 @@ def send_email(body):
 
 #check for email response
 def check_for_response():
-    print("Checking for response in the inbox...")
-    mail = imaplib.IMAP4_SSL(IMAP_SERVER)
-    mail.login(EMAIL, EMAIL_PASSWORD)
-    mail.select("inbox")
-    status, messages = mail.search(None, 'ALL')
-    mail_ids = messages[0].split()
-    for i in reversed(mail_ids[-10:]):  # Only check the last 10 emails for efficiency
-        status, msg_data = mail.fetch(i, '(RFC822)')
-        for part in msg_data:
-            if isinstance(part, tuple):
-                msg = email.message_from_bytes(part[1])
-                print("Email received from: %s", msg['From'])
-                print("Email subject: %s", msg['Subject'])
-                subject = msg['Subject'] or ""
-                if re.search(r"\bTemperature Alert\b", subject, re.IGNORECASE):
-                    content = ""
-                    if msg.is_multipart():
-                        for payload in msg.get_payload():
-                            if payload.get_content_type() == 'text/plain':
-                                content = payload.get_payload(decode=True).decode().strip()
-                    else:
-                        content = msg.get_payload(decode=True).decode().strip()
-                    print("Full email body read: %s", content)
-                    first_line = content.splitlines()[0].strip().upper()
-                    if first_line == "YES":
-                        return True
-                    else:
-                        print("Received response, but not 'YES'. Fan remains OFF.")
-                        return False
-    print("No relevant response found in inbox.")
-    return False
+    try:
+        print("Checking for response in the inbox...")
+        with imaplib.IMAP4_SSL(IMAP_SERVER) as mail:
+            mail.login(EMAIL, EMAIL_PASSWORD)
+            mail.select("inbox")
+            status, messages = mail.search(None, 'ALL')
+            mail_ids = messages[0].split()
+            for i in reversed(mail_ids[-10:]):  # Only check the last 10 emails
+                status, msg_data = mail.fetch(i, '(RFC822)')
+                for part in msg_data:
+                    if isinstance(part, tuple):
+                        msg = email.message_from_bytes(part[1])
+                        print("Email received from:", msg['From'])
+                        print("Email subject:", msg['Subject'])
+                        subject = msg['Subject'] or ""
+                        if re.search(r"\bTemperature Alert\b", subject, re.IGNORECASE):
+                            content = ""
+                            if msg.is_multipart():
+                                for payload in msg.get_payload():
+                                    if payload.get_content_type() == 'text/plain':
+                                        content = payload.get_payload(decode=True).decode().strip()
+                            else:
+                                content = msg.get_payload(decode=True).decode().strip()
+                            print("Full email body read:", content)
+                            first_line = content.splitlines()[0].strip().upper()
+                            return first_line == "YES"
+        print("No relevant response found in inbox.")
+        return False
+    except Exception as e:
+        print(f"Error checking for email response: {e}")
+        return False
 
 #Motor control
 def control_fan(turn_on):
@@ -160,27 +163,31 @@ def monitor_temperature():
     global current_temperature, current_humidity
     alert_sent = False
     while True:
-        chk = dht.readDHT11()
-        if chk == 0:
-            current_temperature = dht.getTemperature()
-            current_humidity = dht.getHumidity()
-            print(f"Temperature: {current_temperature}°C, Humidity: {current_humidity}%")
-            if current_temperature > TEMPERATURE_INTENSITY:
-                if not alert_sent or (not fan_status and not check_for_response()):
-                    send_email("Temperature Alert", f"The current temperature is {current_temperature}°C. Would you like to turn on the fan? Reply YES or NO.")
-                    alert_sent = True
-                    print("Temperature email sent. Waiting for user response...")
-                if check_for_response():
-                    print("User responded 'YES'. Turning on the fan.")
-                    control_fan(True)
-                    #alert_sent = False
+        try:
+            chk = dht.readDHT11()
+            if chk == 0:
+                current_temperature = dht.getTemperature()
+                current_humidity = dht.getHumidity()
+                print(f"Temperature: {current_temperature}°C, Humidity: {current_humidity}%")
+                if current_temperature > TEMPERATURE_INTENSITY:
+                    if not alert_sent:
+                        send_email("Temperature Alert", f"The current temperature is {current_temperature}°C. Would you like to turn on the fan? Reply YES or NO.")
+                        alert_sent = True
+                        print("Temperature email sent. Waiting for user response...")
+                    if check_for_response():
+                        print("User responded 'YES'. Turning on the fan.")
+                        control_fan(True)
+                        alert_sent = False  # Reset alert flag
+                    else:
+                        print("No valid response. Re-checking in 10 seconds.")
+                        time.sleep(10)
                 else:
-                    print("User did not respond 'YES' or fan remains OFF. Re-sending email in 10 seconds.")
-                    time.sleep(10)
-            else:
-                alert_sent = False
-                control_fan(False)
-        time.sleep(2)
+                    alert_sent = False
+                    control_fan(False)
+            time.sleep(2)
+        except Exception as e:
+            print(f"Error in monitor_temperature: {e}")
+
 
 #Mqtt callback method (handle UID)
 def on_message(client, userdata, message):
@@ -208,8 +215,12 @@ def on_message(client, userdata, message):
         #Verify if a user was logged in
         if isLogged:
             #start checking dht11
-            temperature = Thread(targer=monitor_temperature)
-            temperature.start()
+            if not is_monitoring:
+                is_monitoring = True
+                temperature = Thread(targer=monitor_temperature)
+                temperature.start()
+                print("Temperature monitoring started.")
+                
             global email_sent, led_status
             light_intensity = int(message.payload.decode())
             if light_intensity < LIGHT_INTENSITY:
