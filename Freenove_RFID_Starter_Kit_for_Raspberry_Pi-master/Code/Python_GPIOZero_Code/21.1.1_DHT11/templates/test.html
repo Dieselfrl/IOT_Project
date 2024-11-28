@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Home IoT Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Roboto', sans-serif;
+        }
+
+        body {
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 1300px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            color: #333;
+            font-weight: 700;
+            font-size: 2rem;
+        }
+
+        .profile-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .profile-picture {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background-color: #e0e0e0;
+            margin-right: 20px;
+        }
+
+        .profile-info {
+            color: #333;
+        }
+
+        .profile-info p {
+            font-size: 1.1rem;
+            margin-bottom: 5px;
+        }
+
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+        }
+
+        .widget {
+            background-color: #ffffff;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+            text-align: center;
+            color: #333;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: transform 0.2s ease;
+        }
+
+        .widget:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .lightbulb {
+            width: 80px;
+            height: 120px;
+            margin: 20px 0;
+            position: relative;
+        }
+
+        .bulb {
+            width: 100%;
+            height: 70%;
+            background: #ccc;
+            border-radius: 50% 50% 40% 40%;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+            position: absolute;
+            top: 0;
+            transition: background-color 0.5s ease, box-shadow 0.5s ease;
+        }
+
+        .bulb.on {
+            background: #f1c40f;
+            box-shadow: 0 0 40px #f1c40f;
+        }
+
+        .base {
+            width: 40%;
+            height: 30%;
+            background: #555;
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            border-radius: 0 0 15% 15%;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .fan-image {
+            width: 100px;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            transition: transform 0.3s ease;
+        }
+
+        .fan-image.on {
+            animation: spin 1s linear infinite;
+        }
+
+        .fan-image img {
+            width: 100%;
+            height: auto;
+        }
+
+        @keyframes spin {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .thermometer-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 20px 0;
+        }
+
+        .thermometer {
+            width: 50px;
+            height: 200px;
+            background-color: white;
+            border-radius: 25px;
+            border: 3px solid #ccc;
+            position: relative;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .thermometer .fill {
+            width: 100%;
+            height: 0;
+            position: absolute;
+            bottom: 0;
+            transition: height 0.5s ease, background-color 0.5s ease;
+        }
+
+        .pointer-value {
+            font-size: 1.3rem;
+            color: #333;
+            margin-top: 10px;
+            font-weight: 500;
+        }
+
+        .ticks {
+            position: absolute;
+            left: 60px;
+            top: 0;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            text-align: left;
+        }
+
+        .ticks div {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .status {
+            margin-top: 15px;
+            font-size: 1.2rem;
+            font-weight: 500;
+        }
+
+        .slider-container {
+            margin-top: 30px;
+            width: 100%;
+        }
+
+        .slider-label {
+            margin-bottom: 10px;
+            font-size: 1rem;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .slider {
+            width: 100%;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/raphael/2.3.0/raphael.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/justgage@1.4.0/justgage.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Smart Home IoT Dashboard</h1>
+
+        <div class="profile-container">
+            <div class="profile-picture" id="profilePicture"></div>
+            <div class="profile-info">
+                <p id="rfidUser">RFID/User ID: Loading...</p>
+                <p id="temperatureThreshold">Temperature Threshold: 25°C</p>
+                <p id="lightThreshold">Light Intensity Threshold: 400</p>
+            </div>
+        </div>
+
+        <div class="dashboard-container">
+            <div class="widget">
+                <h2>Lightbulb Status</h2>
+                <div class="lightbulb">
+                    <div class="bulb" id="bulb"></div>
+                    <div class="base"></div>
+                </div>
+                <p id="ledStatus" class="status">Loading...</p>
+                <p id="lightIntensity" class="status">Intensity: Loading...</p>
+            </div>
+
+            <div class="widget">
+                <h2>Fan Control</h2>
+                <div class="fan-image" id="fanImageContainer">
+                    <img src="/static/fan.png" id="fanImage" alt="Fan">
+                </div>
+                <div id="fanStatus" class="status">Fan is Off</div>
+            </div>
+
+            <div class="widget">
+                <h2>Temperature (&#8451;)</h2>
+                <div class="thermometer-container">
+                    <div class="thermometer">
+                        <div class="fill" id="thermometerFill"></div>
+                    </div>
+                    <div class="pointer-value" id="pointerValue">0&#8451;</div>
+                    <div class="ticks">
+                        <div>100&#8451;</div>
+                        <div>50&#8451;</div>
+                        <div>0&#8451;</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="widget">
+                <h2>Humidity (%)</h2>
+                <div id="humidityGauge" class="gauge-display large"></div>
+            </div>
+        </div>
+
+        <div class="slider-container">
+            <label for="lightIntensitySlider" class="slider-label">Adjust Light Intensity:</label>
+            <input type="range" id="lightIntensitySlider" class="slider" min="0" max="1000" value="400" oninput="adjustLightIntensity(this.value)">
+            
+            <label for="temperatureSlider" class="slider-label">Adjust Temperature (°C):</label>
+            <input type="range" id="temperatureSlider" class="slider" min="0" max="100" value="25" oninput="adjustTemperature(this.value)">
+            
+            <label for="humiditySlider" class="slider-label">Adjust Humidity (%):</label>
+            <input type="range" id="humiditySlider" class="slider" min="0" max="100" value="0" oninput="adjustHumidity(this.value)">
+            
+            <label for="fanToggleSlider" class="slider-label">Toggle Fan:</label>
+            <input type="checkbox" id="fanToggleSlider" class="slider" onclick="toggleFanManually()">
+        </div>
+    </div>
+
+    <script>
+        let lightThreshold = 400; // Default light intensity threshold
+        let tempThreshold = 25; // Default temperature threshold
+
+        const bulb = document.getElementById('bulb');
+        const ledStatus = document.getElementById('ledStatus');
+        const lightIntensity = document.getElementById('lightIntensity');
+        const fanImage = document.getElementById('fanImage');
+        const fanImageContainer = document.getElementById('fanImageContainer');
+        const fanStatus = document.getElementById('fanStatus');
+        const thermometerFill = document.getElementById('thermometerFill');
+        const pointerValue = document.getElementById('pointerValue');
+        const humidityGauge = new JustGage({
+            id: "humidityGauge",
+            value: 0,
+            min: 0,
+            max: 100,
+            title: "Humidity",
+            label: "%",
+            levelColors: ["#00bfff", "#ffdd00", "#ff0000"],
+            gaugeWidthScale: 0.6,
+            pointer: true
+        });
+
+        function adjustLightIntensity(value) {
+            lightIntensity.textContent = `Intensity: ${value}`;
+            if (value <= lightThreshold) {
+                bulb.classList.add('on');
+                ledStatus.textContent = "LED is On";
+            } else {
+                bulb.classList.remove('on');
+                ledStatus.textContent = "LED is Off";
+            }
+        }
+
+        function adjustTemperature(value) {
+            pointerValue.textContent = `${value}℃`;
+            const height = (value / 100) * 200;
+            thermometerFill.style.height = `${height}px`;
+            thermometerFill.style.backgroundColor = value < 25 ? 'blue' : value <= 75 ? 'orange' : 'red';
+
+            if (value > tempThreshold) {
+                fanStatus.textContent = "Fan is On";
+                fanImageContainer.classList.add("on");
+            } else {
+                fanStatus.textContent = "Fan is Off";
+                fanImageContainer.classList.remove("on");
+            }
+        }
+
+        function adjustHumidity(value) {
+            humidityGauge.refresh(value);
+        }
+
+        function toggleFanManually() {
+            if (document.getElementById('fanToggleSlider').checked) {
+                fanImageContainer.classList.add('on');
+                fanStatus.textContent = "Fan is On";
+            } else {
+                fanImageContainer.classList.remove('on');
+                fanStatus.textContent = "Fan is Off";
+            }
+        }
+
+        setInterval(() => {
+            // Randomly update RFID for demonstration
+            document.getElementById('rfidUser').textContent = `RFID/User ID: ${Math.floor(Math.random() * 1000)}`;
+        }, 2000);
+    </script>
+</body>
+
+</html>
