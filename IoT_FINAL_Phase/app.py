@@ -1,14 +1,16 @@
 from flask import Flask, render_template, jsonify, request
 import paho.mqtt.client as mqtt
+import sqlite3
+import logging
+import random
+import RPi.GPIO as GPIO
 import smtplib, ssl
 import imaplib, email
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from threading import Thread
-import RPi.GPIO as GPIO
 import time
 import re
-import logging
+from threading import Thread
 from Freenove_DHT import DHT
 
 app = Flask(__name__)
@@ -19,13 +21,13 @@ MQTT_LIGHT_TOPIC = "light/data"
 MQTT_RFID_TOPIC = "home/rfid"
 
 # Global Variables
+rfid_user = "Unknown"
+current_temperature = 0
 light_intensity = 0
 led_status = "OFF"
 email_sent = False
-current_temperature = 0
 current_humidity = 0
 fan_status = False
-rfid_user = "Unknown"
 
 # Pin setup
 DHTPin = 17  # DHT11 sensor pin
@@ -55,9 +57,15 @@ logger = logging.getLogger(__name__)
 
 # MQTT Client Setup
 def on_message(client, userdata, message):
-    global light_intensity, led_status, email_sent, rfid_user
+    global rfid_user, current_temperature, light_intensity, led_status, email_sent
     topic = message.topic
     payload = message.payload.decode()
+
+    if topic == MQTT_RFID_TOPIC:
+        rfid_user = payload
+        register_user_with_thresholds(rfid_user)
+        rfid_user = get_user_by_rfid(rfid_user)
+        logger.info(f"RFID User: {rfid_user}")
 
     if topic == MQTT_LIGHT_TOPIC:
         light_intensity = int(payload)
@@ -70,15 +78,51 @@ def on_message(client, userdata, message):
             led_status = "OFF"
             GPIO.output(LED_PIN, GPIO.LOW)
             email_sent = False
-    elif topic == MQTT_RFID_TOPIC:
-        rfid_user = payload
-        logger.info(f"RFID User: {rfid_user}")
 
 client = mqtt.Client()
 client.on_message = on_message
 client.connect(MQTT_BROKER, 1883, 60)
 client.subscribe([(MQTT_LIGHT_TOPIC, 0), (MQTT_RFID_TOPIC, 0)])
 client.loop_start()
+
+# Database Integration
+def get_user_by_rfid(rfid_tag):
+    try:
+        conn = sqlite3.connect('rfid_users.db')
+        cursor = conn.cursor()
+        cursor.execute('SELECT username FROM users WHERE rfid_tag = ?', (rfid_tag,))
+        result = cursor.fetchone()
+        conn.close()
+        return result[0] if result else "Unknown"
+    except Exception as e:
+        logger.error(f"Error fetching user from database: {e}")
+        return "Unknown"
+
+def register_user_with_thresholds(rfid_tag):
+    try:
+        conn = sqlite3.connect('rfid_users.db')
+        cursor = conn.cursor()
+
+        # Generate random thresholds within a reasonable range
+        temp_threshold = random.uniform(22.0, 28.0)  # Temperature threshold between 22°C and 28°C
+        light_threshold = random.randint(300, 700)    # Light intensity threshold between 300 and 700
+        humidity_threshold = random.uniform(40.0, 60.0)  # Humidity threshold between 40% and 60%
+
+        # Insert or update user in the database
+        cursor.execute('''
+            INSERT INTO users (rfid_tag, temp_threshold, light_threshold, humidity_threshold)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(rfid_tag) DO UPDATE SET
+                temp_threshold=excluded.temp_threshold,
+                light_threshold=excluded.light_threshold,
+                humidity_threshold=excluded.humidity_threshold
+        ''', (rfid_tag, temp_threshold, light_threshold, humidity_threshold))
+
+        conn.commit()
+        conn.close()
+        logger.info(f"User with RFID {rfid_tag} registered/updated with thresholds: Temp={temp_threshold}, Light={light_threshold}, Humidity={humidity_threshold}")
+    except Exception as e:
+        logger.error(f"Error registering user with thresholds: {e}")
 
 # Email Functions
 def send_email(subject, body):
@@ -101,90 +145,6 @@ def send_email(subject, body):
     finally:
         server.quit()
 
-def check_for_response():
-    logger.info("Checking for response in the inbox...")
-    mail = imaplib.IMAP4_SSL(IMAP_SERVER)
-    mail.login(EMAIL, EMAIL_PASSWORD)
-    mail.select("inbox")
-
-    status, messages = mail.search(None, 'ALL')
-    mail_ids = messages[0].split()
-
-    for i in reversed(mail_ids[-10:]):  # Only check the last 10 emails for efficiency
-        status, msg_data = mail.fetch(i, '(RFC822)')
-        for part in msg_data:
-            if isinstance(part, tuple):
-                msg = email.message_from_bytes(part[1])
-                logger.info("Email received from: %s", msg['From'])
-                logger.info("Email subject: %s", msg['Subject'])
-
-                subject = msg['Subject'] or ""
-                if re.search(r"\bTemperature Alert\b", subject, re.IGNORECASE):
-                    content = ""
-                    if msg.is_multipart():
-                        for payload in msg.get_payload():
-                            if payload.get_content_type() == 'text/plain':
-                                content = payload.get_payload(decode=True).decode().strip()
-                    else:
-                        content = msg.get_payload(decode=True).decode().strip()
-
-                    logger.info("Full email body read: %s", content)
-                    first_line = content.splitlines()[0].strip().upper()
-
-                    if first_line == "YES":
-                        return True
-                    else:
-                        logger.info("Received response, but not 'YES'. Fan remains OFF.")
-                        return False
-    logger.info("No relevant response found in inbox.")
-    return False
-
-# Fan Control
-def control_fan(turn_on):
-    global fan_status
-    if turn_on:
-        GPIO.output(Motor1, GPIO.HIGH)
-        GPIO.output(Motor2, GPIO.LOW)
-        GPIO.output(Motor3, GPIO.HIGH)
-        fan_status = True
-        logger.info("Fan is ON.")
-    else:
-        GPIO.output(Motor1, GPIO.LOW)
-        GPIO.output(Motor2, GPIO.LOW)
-        GPIO.output(Motor3, GPIO.LOW)
-        fan_status = False
-        logger.info("Fan is OFF.")
-
-# Monitor Temperature
-def monitor_temperature():
-    global current_temperature, current_humidity
-    alert_sent = False
-
-    while True:
-        chk = dht.readDHT11()
-        if chk == 0:
-            current_temperature = dht.getTemperature()
-            current_humidity = dht.getHumidity()
-            logger.info(f"Temperature: {current_temperature}°C, Humidity: {current_humidity}%")
-
-            if current_temperature > TEMP_THRESHOLD:
-                if not alert_sent or (not fan_status and not check_for_response()):
-                    send_email("Temperature Alert", f"The current temperature is {current_temperature}°C. Would you like to turn on the fan? Reply YES or NO.")
-                    alert_sent = True
-                    logger.info("Temperature email sent. Waiting for user response...")
-
-                if check_for_response():
-                    logger.info("User responded 'YES'. Turning on the fan.")
-                    control_fan(True)
-                    alert_sent = False
-                else:
-                    logger.info("User did not respond 'YES' or fan remains OFF. Re-sending email in 10 seconds.")
-                    time.sleep(10)
-            else:
-                alert_sent = False
-                control_fan(False)
-        time.sleep(2)
-
 # Flask Routes
 @app.route('/')
 def index():
@@ -193,25 +153,16 @@ def index():
 @app.route('/data')
 def data():
     return jsonify({
+        "rfidUser": rfid_user,
+        "temperature": current_temperature,
         "lightIntensity": light_intensity,
         "ledStatus": led_status,
-        "temperature": current_temperature,
-        "humidity": current_humidity,
-        "fanStatus": fan_status,
-        "rfidUser": rfid_user
+        "fanStatus": fan_status
     })
-
-@app.route('/control_fan', methods=['POST'])
-def control_fan_route():
-    data = request.get_json()
-    if 'turnOn' in data:
-        control_fan(data['turnOn'])
-        return jsonify({"message": "Fan control updated"}), 200
-    return jsonify({"error": "Invalid request"}), 400
 
 if __name__ == '__main__':
     try:
-        threading.Thread(target=monitor_temperature).start()
+        Thread(target=client.loop_forever).start()
         app.run(debug=True, host='0.0.0.0', port=5000)
     except KeyboardInterrupt:
         logger.info("Shutting down...")

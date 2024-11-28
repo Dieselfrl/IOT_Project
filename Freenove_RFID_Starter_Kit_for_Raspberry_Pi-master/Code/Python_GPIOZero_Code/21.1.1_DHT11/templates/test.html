@@ -200,89 +200,20 @@
             font-weight: 500;
         }
 
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 60px;
-            height: 34px;
-            margin-top: 10px;
+        .slider-container {
+            margin-top: 30px;
+            width: 100%;
         }
 
-        .switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
+        .slider-label {
+            margin-bottom: 10px;
+            font-size: 1rem;
+            font-weight: 500;
+            color: #333;
         }
 
         .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #ccc;
-            transition: .4s;
-            border-radius: 34px;
-        }
-
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 26px;
-            width: 26px;
-            left: 4px;
-            bottom: 4px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-
-        input:checked + .slider {
-            background-color: #2196F3;
-        }
-
-        input:checked + .slider:before {
-            transform: translateX(26px);
-        }
-
-        .threshold-input {
-            margin-top: 30px;
-            padding: 20px;
-            background-color: #16a085;
-            border-radius: 15px;
-            color: #ffffff;
-            text-align: left;
             width: 100%;
-        }
-
-        .threshold-input label {
-            display: block;
-            margin: 10px 0 5px;
-        }
-
-        .threshold-input input {
-            width: calc(100% - 20px);
-            padding: 8px;
-            border-radius: 5px;
-            border: none;
-            font-size: 1rem;
-        }
-
-        .threshold-input button {
-            margin-top: 15px;
-            padding: 10px 20px;
-            background-color: #2980b9;
-            color: #ffffff;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            width: 100%;
-            font-size: 1rem;
-        }
-
-        .threshold-input button:hover {
-            background-color: #3498db;
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/raphael/2.3.0/raphael.min.js"></script>
@@ -297,8 +228,8 @@
             <div class="profile-picture" id="profilePicture"></div>
             <div class="profile-info">
                 <p id="rfidUser">RFID/User ID: Loading...</p>
-                <p id="temperatureThreshold">Temperature Threshold: Loading...</p>
-                <p id="lightThreshold">Light Intensity Threshold: Loading...</p>
+                <p id="temperatureThreshold">Temperature Threshold: 25°C</p>
+                <p id="lightThreshold">Light Intensity Threshold: 400</p>
             </div>
         </div>
 
@@ -315,13 +246,9 @@
 
             <div class="widget">
                 <h2>Fan Control</h2>
-                <div class="fan-image">
+                <div class="fan-image" id="fanImageContainer">
                     <img src="/static/fan.png" id="fanImage" alt="Fan">
                 </div>
-                <label class="switch">
-                    <input type="checkbox" id="fanToggle" onclick="toggleFan()">
-                    <span class="slider"></span>
-                </label>
                 <div id="fanStatus" class="status">Fan is Off</div>
             </div>
 
@@ -346,13 +273,18 @@
             </div>
         </div>
 
-        <div class="threshold-input">
-            <h3>Set Thresholds</h3>
-            <label for="lightThresholdInput">Light Intensity Threshold:</label>
-            <input type="number" id="lightThresholdInput" value="400">
-            <label for="tempThresholdInput">Temperature Threshold (°C):</label>
-            <input type="number" id="tempThresholdInput" value="25">
-            <button onclick="updateThresholds()">Update Thresholds</button>
+        <div class="slider-container">
+            <label for="lightIntensitySlider" class="slider-label">Adjust Light Intensity:</label>
+            <input type="range" id="lightIntensitySlider" class="slider" min="0" max="1000" value="400" oninput="adjustLightIntensity(this.value)">
+            
+            <label for="temperatureSlider" class="slider-label">Adjust Temperature (°C):</label>
+            <input type="range" id="temperatureSlider" class="slider" min="0" max="100" value="25" oninput="adjustTemperature(this.value)">
+            
+            <label for="humiditySlider" class="slider-label">Adjust Humidity (%):</label>
+            <input type="range" id="humiditySlider" class="slider" min="0" max="100" value="0" oninput="adjustHumidity(this.value)">
+            
+            <label for="fanToggleSlider" class="slider-label">Toggle Fan:</label>
+            <input type="checkbox" id="fanToggleSlider" class="slider" onclick="toggleFanManually()">
         </div>
     </div>
 
@@ -364,7 +296,7 @@
         const ledStatus = document.getElementById('ledStatus');
         const lightIntensity = document.getElementById('lightIntensity');
         const fanImage = document.getElementById('fanImage');
-        const fanToggle = document.getElementById('fanToggle');
+        const fanImageContainer = document.getElementById('fanImageContainer');
         const fanStatus = document.getElementById('fanStatus');
         const thermometerFill = document.getElementById('thermometerFill');
         const pointerValue = document.getElementById('pointerValue');
@@ -379,78 +311,51 @@
             gaugeWidthScale: 0.6,
             pointer: true
         });
-        const rfidUser = document.getElementById('rfidUser');
 
-        function updateThresholds() {
-            lightThreshold = parseInt(document.getElementById('lightThresholdInput').value);
-            tempThreshold = parseInt(document.getElementById('tempThresholdInput').value);
-            document.getElementById("temperatureThreshold").textContent = `Temperature Threshold: ${tempThreshold}°C`;
-            document.getElementById("lightThreshold").textContent = `Light Intensity Threshold: ${lightThreshold}`;
-            alert(`Thresholds updated successfully!\nLight Threshold: ${lightThreshold}\nTemperature Threshold: ${tempThreshold}`);
-        }
-
-        async function fetchData() {
-            try {
-                const response = await fetch('/data');
-                const data = await response.json();
-
-                // Update light intensity and bulb status
-                lightIntensity.textContent = `Intensity: ${data.lightIntensity}`;
-                if (data.lightIntensity <= lightThreshold) {
-                    bulb.classList.add('on');
-                    ledStatus.textContent = "LED is On";
-                } else {
-                    bulb.classList.remove('on');
-                    ledStatus.textContent = "LED is Off";
-                }
-
-                // Update fan status
-                if (data.temperature > tempThreshold) {
-                    fanToggle.checked = true;
-                    fanStatus.textContent = "Fan is On";
-                    fanImage.classList.add("on");
-                } else {
-                    fanToggle.checked = false;
-                    fanStatus.textContent = "Fan is Off";
-                    fanImage.classList.remove("on");
-                }
-
-                // Update temperature and humidity
-                const height = (data.temperature / 100) * 200;
-                thermometerFill.style.height = `${height}px`;
-                thermometerFill.style.backgroundColor = data.temperature < 25 ? 'blue' : data.temperature <= 75 ? 'orange' : 'red';
-                pointerValue.textContent = `${data.temperature}℃`;
-                humidityGauge.refresh(data.humidity);
-
-                // Update user profile info
-                rfidUser.textContent = `RFID/User ID: ${data.rfidUser}`;
-            } catch (error) {
-                console.error("Error fetching data:", error);
-                lightIntensity.textContent = "Error fetching data";
-                ledStatus.textContent = "Error fetching data";
-                fanStatus.textContent = "Error fetching data";
-                pointerValue.textContent = "Error fetching data";
-                rfidUser.textContent = "Error fetching data";
+        function adjustLightIntensity(value) {
+            lightIntensity.textContent = `Intensity: ${value}`;
+            if (value <= lightThreshold) {
+                bulb.classList.add('on');
+                ledStatus.textContent = "LED is On";
+            } else {
+                bulb.classList.remove('on');
+                ledStatus.textContent = "LED is Off";
             }
         }
 
-        async function toggleFan() {
-            try {
-                const response = await fetch('/control_fan', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ turnOn: fanToggle.checked }),
-                });
-                const result = await response.json();
-                console.log(result.message);
-            } catch (error) {
-                console.error("Error toggling fan:", error);
+        function adjustTemperature(value) {
+            pointerValue.textContent = `${value}℃`;
+            const height = (value / 100) * 200;
+            thermometerFill.style.height = `${height}px`;
+            thermometerFill.style.backgroundColor = value < 25 ? 'blue' : value <= 75 ? 'orange' : 'red';
+
+            if (value > tempThreshold) {
+                fanStatus.textContent = "Fan is On";
+                fanImageContainer.classList.add("on");
+            } else {
+                fanStatus.textContent = "Fan is Off";
+                fanImageContainer.classList.remove("on");
             }
         }
 
-        setInterval(fetchData, 2000);
+        function adjustHumidity(value) {
+            humidityGauge.refresh(value);
+        }
+
+        function toggleFanManually() {
+            if (document.getElementById('fanToggleSlider').checked) {
+                fanImageContainer.classList.add('on');
+                fanStatus.textContent = "Fan is On";
+            } else {
+                fanImageContainer.classList.remove('on');
+                fanStatus.textContent = "Fan is Off";
+            }
+        }
+
+        setInterval(() => {
+            // Randomly update RFID for demonstration
+            document.getElementById('rfidUser').textContent = `RFID/User ID: ${Math.floor(Math.random() * 1000)}`;
+        }, 2000);
     </script>
 </body>
 

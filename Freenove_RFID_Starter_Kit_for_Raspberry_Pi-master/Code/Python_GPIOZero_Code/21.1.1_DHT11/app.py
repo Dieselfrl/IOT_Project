@@ -9,6 +9,8 @@ import threading
 import logging
 import re
 import paho.mqtt.client as mqtt
+import sqlite3
+from threading import Lock
 
 # Pin setup
 DHTPin = 17  # DHT11 sensor pin
@@ -36,10 +38,30 @@ fan_status = False  # Track fan status
 
 # MQTT Configuration
 MQTT_BROKER = "192.168.171.150"
-MQTT_TOPIC = "light/data"
+MQTT_TOPIC_LIGHT = "light/data"
+MQTT_TOPIC_CARD = "card/scanned"
 light_intensity = 0
 led_status = "OFF"
 email_sent = False
+
+# SQLite setup
+conn = sqlite3.connect("users.db", check_same_thread=False)
+cursor = conn.cursor()
+thread_lock = Lock()
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS User (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    UID TEXT UNIQUE NOT NULL,
+    light_intensity INTEGER,
+    temperature_intensity INTEGER
+)
+""")
+conn.commit()
+
+# Global variables for user presets
+LIGHT_INTENSITY = 0
+TEMPERATURE_INTENSITY = 0
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -104,24 +126,66 @@ def check_for_response():
     logger.info("No relevant response found in inbox.")
     return False
 
+# SQLite Functions
+def get_user_by_uid(uid):
+    with thread_lock:
+        try:
+            cursor.execute(
+                "SELECT * FROM User WHERE UID = ?",
+                (uid,)
+            )
+            user = cursor.fetchone()
+            if user:
+                print("User was found!")
+            return user
+        except sqlite3.Error as e:
+            print(f"User was not found! Error: {e}")
+        return None
+
+def insert_user(uid, light_intensity, temperature_intensity):
+    with thread_lock:
+        try:
+            cursor.execute(
+                "INSERT INTO User (UID, light_intensity, temperature_intensity) VALUES (?, ?, ?)",
+                (uid, light_intensity, temperature_intensity)
+            )
+            conn.commit()
+            print(f"User {uid} was created")
+        except sqlite3.Error as e:
+            print(f"Error while inserting user {uid}: {e}")
+
 # MQTT Functions
 def on_message(client, userdata, message):
-    global light_intensity, led_status, email_sent
-    light_intensity = int(message.payload.decode())
-    if light_intensity < 400:
-        led_status = "ON"
-        if not email_sent:
-            send_email(current_temperature)
-            email_sent = True
-    else:
-        led_status = "OFF"
-        email_sent = False
+    global light_intensity, led_status, email_sent, LIGHT_INTENSITY, TEMPERATURE_INTENSITY
+    topic = message.topic
+    if topic == MQTT_TOPIC_LIGHT:
+        light_intensity = int(message.payload.decode())
+        if light_intensity < 400:
+            led_status = "ON"
+            if not email_sent:
+                send_email(current_temperature)
+                email_sent = True
+        else:
+            led_status = "OFF"
+            email_sent = False
+    elif topic == MQTT_TOPIC_CARD:
+        uid = message.payload.decode()
+        print(f"Card scanned with UID: {uid}")
+        user = get_user_by_uid(uid)
+        if user is None:
+            insert_user(uid, 400, 400)
+            user = get_user_by_uid(uid)
+
+        LIGHT_INTENSITY = user[2]
+        TEMPERATURE_INTENSITY = user[3]
+        print(f"Light intensity set to: {LIGHT_INTENSITY} | Temperature intensity set to: {TEMPERATURE_INTENSITY}")
 
 def mqtt_thread():
     client = mqtt.Client()
     client.on_message = on_message
     client.connect(MQTT_BROKER, 1883, 60)
-    client.subscribe(MQTT_TOPIC)
+    client.subscribe(MQTT_TOPIC_LIGHT)
+    client.subscribe(MQTT_TOPIC_CARD)
     client.loop_forever()
 
 def control_fan(turn_on):
