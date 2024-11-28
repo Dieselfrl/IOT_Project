@@ -4,67 +4,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IoT Unified Dashboard</title>
+    <title>Smart Home IoT Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            font-family: 'Roboto', sans-serif;
         }
 
         body {
-            font-family: Arial, sans-serif;
-            background-color: #2c3e50;
+            background-color: #f0f2f5;
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-start;
             height: 100vh;
+            padding: 20px;
         }
 
         .container {
-            text-align: center;
-            background-color: #34495e;
+            background-color: #ffffff;
             padding: 30px;
-            border-radius: 10px;
+            border-radius: 20px;
             width: 90%;
-            max-width: 1200px;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+            max-width: 1300px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
         }
 
         h1 {
             margin-bottom: 20px;
-            color: #ecf0f1;
+            color: #333;
+            font-weight: 700;
+            font-size: 2rem;
+        }
+
+        .profile-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .profile-picture {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background-color: #e0e0e0;
+            margin-right: 20px;
+        }
+
+        .profile-info {
+            color: #333;
+        }
+
+        .profile-info p {
+            font-size: 1.1rem;
+            margin-bottom: 5px;
         }
 
         .dashboard-container {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-around;
-            gap: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
         }
 
         .widget {
-            background-color: #1abc9c;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            background-color: #ffffff;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
             text-align: center;
-            flex: 1 1 250px;
-            max-width: 300px;
-            min-height: 350px;
-            color: #ecf0f1;
+            color: #333;
             position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: transform 0.2s ease;
         }
 
-        .widget h2 {
-            margin-bottom: 15px;
-            font-size: 1.5rem;
+        .widget:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
         }
 
         .lightbulb {
-            width: 100px;
-            height: 150px;
-            margin: 20px auto;
+            width: 80px;
+            height: 120px;
+            margin: 20px 0;
             position: relative;
         }
 
@@ -84,9 +110,21 @@
             box-shadow: 0 0 40px #f1c40f;
         }
 
+        .base {
+            width: 40%;
+            height: 30%;
+            background: #555;
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            border-radius: 0 0 15% 15%;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+        }
+
         .fan-image {
-            width: 200px;
-            margin-top: 30px;
+            width: 100px;
+            margin-top: 20px;
             margin-bottom: 10px;
             transition: transform 0.3s ease;
         }
@@ -95,21 +133,156 @@
             animation: spin 1s linear infinite;
         }
 
+        .fan-image img {
+            width: 100%;
+            height: auto;
+        }
+
         @keyframes spin {
             100% {
                 transform: rotate(360deg);
             }
         }
 
-        .gauge-display.large {
-            width: 240px;
-            height: 240px;
-            margin: 0 auto;
+        .thermometer-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 20px 0;
+        }
+
+        .thermometer {
+            width: 50px;
+            height: 200px;
+            background-color: white;
+            border-radius: 25px;
+            border: 3px solid #ccc;
+            position: relative;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .thermometer .fill {
+            width: 100%;
+            height: 0;
+            position: absolute;
+            bottom: 0;
+            transition: height 0.5s ease, background-color 0.5s ease;
+        }
+
+        .pointer-value {
+            font-size: 1.3rem;
+            color: #333;
+            margin-top: 10px;
+            font-weight: 500;
+        }
+
+        .ticks {
+            position: absolute;
+            left: 60px;
+            top: 0;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            text-align: left;
+        }
+
+        .ticks div {
+            font-size: 0.9rem;
+            color: #666;
         }
 
         .status {
             margin-top: 15px;
             font-size: 1.2rem;
+            font-weight: 500;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+            margin-top: 10px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #2196F3;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        .threshold-input {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #16a085;
+            border-radius: 15px;
+            color: #ffffff;
+            text-align: left;
+            width: 100%;
+        }
+
+        .threshold-input label {
+            display: block;
+            margin: 10px 0 5px;
+        }
+
+        .threshold-input input {
+            width: calc(100% - 20px);
+            padding: 8px;
+            border-radius: 5px;
+            border: none;
+            font-size: 1rem;
+        }
+
+        .threshold-input button {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background-color: #2980b9;
+            color: #ffffff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 1rem;
+        }
+
+        .threshold-input button:hover {
+            background-color: #3498db;
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/raphael/2.3.0/raphael.min.js"></script>
@@ -118,10 +291,18 @@
 
 <body>
     <div class="container">
-        <h1>IoT Unified Dashboard</h1>
-        <div class="dashboard-container">
+        <h1>Smart Home IoT Dashboard</h1>
 
-            <!-- Light Intensity and Bulb Status -->
+        <div class="profile-container">
+            <div class="profile-picture" id="profilePicture"></div>
+            <div class="profile-info">
+                <p id="rfidUser">RFID/User ID: Loading...</p>
+                <p id="temperatureThreshold">Temperature Threshold: Loading...</p>
+                <p id="lightThreshold">Light Intensity Threshold: Loading...</p>
+            </div>
+        </div>
+
+        <div class="dashboard-container">
             <div class="widget">
                 <h2>Lightbulb Status</h2>
                 <div class="lightbulb">
@@ -129,42 +310,65 @@
                     <div class="base"></div>
                 </div>
                 <p id="ledStatus" class="status">Loading...</p>
+                <p id="lightIntensity" class="status">Intensity: Loading...</p>
             </div>
 
-            <div class="widget">
-                <h2>Light Intensity</h2>
-                <p id="lightIntensity" class="status">Loading...</p>
-            </div>
-
-            <div class="widget">
-                <h2>Email Notification</h2>
-                <p id="emailNotification" class="status">Loading...</p>
-            </div>
-
-            <!-- Fan Control -->
             <div class="widget">
                 <h2>Fan Control</h2>
-                <img id="fanImage" class="fan-image" src="{{ url_for('static', filename='fan.png') }}" alt="Fan">
+                <div class="fan-image">
+                    <img src="/static/fan.png" id="fanImage" alt="Fan">
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="fanToggle" onclick="toggleFan()">
+                    <span class="slider"></span>
+                </label>
                 <div id="fanStatus" class="status">Fan is Off</div>
             </div>
 
-            <!-- Temperature -->
             <div class="widget">
-                <h2>Temperature (°C)</h2>
-                <p id="temperature" class="status">Loading...</p>
+                <h2>Temperature (&#8451;)</h2>
+                <div class="thermometer-container">
+                    <div class="thermometer">
+                        <div class="fill" id="thermometerFill"></div>
+                    </div>
+                    <div class="pointer-value" id="pointerValue">0&#8451;</div>
+                    <div class="ticks">
+                        <div>100&#8451;</div>
+                        <div>50&#8451;</div>
+                        <div>0&#8451;</div>
+                    </div>
+                </div>
             </div>
 
-            <!-- Humidity -->
             <div class="widget">
                 <h2>Humidity (%)</h2>
                 <div id="humidityGauge" class="gauge-display large"></div>
             </div>
+        </div>
 
+        <div class="threshold-input">
+            <h3>Set Thresholds</h3>
+            <label for="lightThresholdInput">Light Intensity Threshold:</label>
+            <input type="number" id="lightThresholdInput" value="400">
+            <label for="tempThresholdInput">Temperature Threshold (°C):</label>
+            <input type="number" id="tempThresholdInput" value="25">
+            <button onclick="updateThresholds()">Update Thresholds</button>
         </div>
     </div>
 
     <script>
-        let humidityGauge = new JustGage({
+        let lightThreshold = 400; // Default light intensity threshold
+        let tempThreshold = 25; // Default temperature threshold
+
+        const bulb = document.getElementById('bulb');
+        const ledStatus = document.getElementById('ledStatus');
+        const lightIntensity = document.getElementById('lightIntensity');
+        const fanImage = document.getElementById('fanImage');
+        const fanToggle = document.getElementById('fanToggle');
+        const fanStatus = document.getElementById('fanStatus');
+        const thermometerFill = document.getElementById('thermometerFill');
+        const pointerValue = document.getElementById('pointerValue');
+        const humidityGauge = new JustGage({
             id: "humidityGauge",
             value: 0,
             min: 0,
@@ -175,45 +379,74 @@
             gaugeWidthScale: 0.6,
             pointer: true
         });
+        const rfidUser = document.getElementById('rfidUser');
+
+        function updateThresholds() {
+            lightThreshold = parseInt(document.getElementById('lightThresholdInput').value);
+            tempThreshold = parseInt(document.getElementById('tempThresholdInput').value);
+            document.getElementById("temperatureThreshold").textContent = `Temperature Threshold: ${tempThreshold}°C`;
+            document.getElementById("lightThreshold").textContent = `Light Intensity Threshold: ${lightThreshold}`;
+            alert(`Thresholds updated successfully!\nLight Threshold: ${lightThreshold}\nTemperature Threshold: ${tempThreshold}`);
+        }
 
         async function fetchData() {
             try {
                 const response = await fetch('/data');
                 const data = await response.json();
 
-                // Update Temperature
-                document.getElementById('temperature').textContent = `Temperature: ${data.temperature}°C`;
-
-                // Update Humidity
-                humidityGauge.refresh(data.humidity);
-
-                // Update Fan Status
-                const fanImage = document.getElementById('fanImage');
-                const fanStatusText = document.getElementById('fanStatus');
-                if (data.fan_status) {
-                    fanImage.classList.add("on");
-                    fanStatusText.innerText = "Fan is On";
-                } else {
-                    fanImage.classList.remove("on");
-                    fanStatusText.innerText = "Fan is Off";
-                }
-
-                // Update Light Intensity and Bulb Status
-                document.getElementById('lightIntensity').textContent = `Intensity: ${data.lightIntensity}`;
-                const bulb = document.getElementById('bulb');
-                if (data.ledStatus === "ON") {
+                // Update light intensity and bulb status
+                lightIntensity.textContent = `Intensity: ${data.lightIntensity}`;
+                if (data.lightIntensity <= lightThreshold) {
                     bulb.classList.add('on');
-                    document.getElementById('ledStatus').textContent = "LED is On";
+                    ledStatus.textContent = "LED is On";
                 } else {
                     bulb.classList.remove('on');
-                    document.getElementById('ledStatus').textContent = "LED is Off";
+                    ledStatus.textContent = "LED is Off";
                 }
 
-                // Update Email Notification Status
-                document.getElementById('emailNotification').textContent = data.emailSent ? "Email Sent" : "Email Not Sent";
+                // Update fan status
+                if (data.temperature > tempThreshold) {
+                    fanToggle.checked = true;
+                    fanStatus.textContent = "Fan is On";
+                    fanImage.classList.add("on");
+                } else {
+                    fanToggle.checked = false;
+                    fanStatus.textContent = "Fan is Off";
+                    fanImage.classList.remove("on");
+                }
 
+                // Update temperature and humidity
+                const height = (data.temperature / 100) * 200;
+                thermometerFill.style.height = `${height}px`;
+                thermometerFill.style.backgroundColor = data.temperature < 25 ? 'blue' : data.temperature <= 75 ? 'orange' : 'red';
+                pointerValue.textContent = `${data.temperature}℃`;
+                humidityGauge.refresh(data.humidity);
+
+                // Update user profile info
+                rfidUser.textContent = `RFID/User ID: ${data.rfidUser}`;
             } catch (error) {
                 console.error("Error fetching data:", error);
+                lightIntensity.textContent = "Error fetching data";
+                ledStatus.textContent = "Error fetching data";
+                fanStatus.textContent = "Error fetching data";
+                pointerValue.textContent = "Error fetching data";
+                rfidUser.textContent = "Error fetching data";
+            }
+        }
+
+        async function toggleFan() {
+            try {
+                const response = await fetch('/control_fan', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ turnOn: fanToggle.checked }),
+                });
+                const result = await response.json();
+                console.log(result.message);
+            } catch (error) {
+                console.error("Error toggling fan:", error);
             }
         }
 
