@@ -34,12 +34,19 @@ MQTT_TOPIC = "card/scanned"
 LIGHT_INTENSITY = 0
 TEMPERATURE_INTENSITY = 0
 
+GPIO.setmode(GPIO.BCM)
+
 #DHT SETUP + MOTOR
-DHTPin = 17
+DHTPin = 16
+dht = DHT(DHTPin)
+GPIO.setup(DHTPin, GPIO.OUT)
 current_temperature = 0
 current_humidity = 0
 fan_status = False
 Motor1, Motor2, Motor3 = 22, 27, 17  
+GPIO.setup(Motor1, GPIO.OUT)
+GPIO.setup(Motor2, GPIO.OUT)
+GPIO.setup(Motor3, GPIO.OUT)
 
 isLogged = False
 led_status = "OFF"
@@ -48,12 +55,11 @@ email_sent = False
 #LED settings
 LED_PIN = 18
 light_intensity = 0
-GPIO.setmode(GPIO.BCM)
 GPIO.setup(LED_PIN, GPIO.OUT)
 
-EMAIL = 'stevenbeaven234@gmail.com'
-EMAIL_PASSWORD = 'bfic leud wpdi xkki'
-RECIPIENT_EMAIL = "stevenbeaven234@gmail.com"
+EMAIL = ''
+EMAIL_PASSWORD = ''
+RECIPIENT_EMAIL = ""
 IMAP_SERVER = "imap.gmail.com"
 
 rfidUser = ""
@@ -87,13 +93,33 @@ def insert_user(uid, light_intensity, temperature_intensity):
             conn.commit()
         except sqlite3.Error as e:
             print(f"Error while inserting user {uid}: {e}")
+            
+#Updating user Profile       
+def update_user_intensities(uid, light_intensity, temperature_intensity):
+    """
+    Update the light and temperature intensity for a given UID.
+    """
+    with thread_lock:
+        try:
+            cursor.execute(
+                """
+                UPDATE User
+                SET light_intensity = ?, temperature_intensity = ?
+                WHERE UID = ?
+                """,
+                (light_intensity, temperature_intensity, uid)
+            )
+            conn.commit()
+            print(f"Updated intensities for UID {uid}: Light = {light_intensity}, Temperature = {temperature_intensity}")
+        except sqlite3.Error as e:
+            print(f"Error updating intensities for UID {uid}: {e}")
 
-def send_email(body):
+def send_email(subject,body):
     global email_sent
     msg = MIMEMultipart()
     msg['From'] = EMAIL
     msg['To'] = RECIPIENT_EMAIL
-    msg['Subject'] = "Light Notification"
+    msg['Subject'] = subject
     msg.attach(MIMEText(body, 'plain'))
 
     try:
@@ -184,14 +210,17 @@ def monitor_temperature():
                 else:
                     alert_sent = False
                     control_fan(False)
+            else:
+                print(f"chk: {chk}")
             time.sleep(2)
+            
         except Exception as e:
             print(f"Error in monitor_temperature: {e}")
 
 
 #Mqtt callback method (handle UID)
 def on_message(client, userdata, message):
-    
+    global is_monitoring
     #Verify topic
     if message.topic == MQTT_TOPIC:
         uid = message.payload.decode()
@@ -199,7 +228,7 @@ def on_message(client, userdata, message):
         user = getUserByUID(uid)
         if user is None:
             #take presets and set the global varriables
-            insert_user(uid,400,400)
+            insert_user(uid,400,24)
             print(f"User {uid} was created")
             user = getUserByUID(uid)
         
@@ -210,15 +239,15 @@ def on_message(client, userdata, message):
         print(f"Light intensity set to: {LIGHT_INTENSITY} | Temperature intensity set to: {TEMPERATURE_INTENSITY}")
         rfidUser = uid
         body = f"{uid} has signed in at {time.strftime('%H:%M')}."
-        send_email(body)
+        send_email("Login",body)
     elif message.topic == "room/light":
         #Verify if a user was logged in
         if isLogged:
             #start checking dht11
             if not is_monitoring:
                 is_monitoring = True
-                temperature = Thread(targer=monitor_temperature)
-                temperature.start()
+                temperature_thread = Thread(target=monitor_temperature, daemon=True)
+                temperature_thread.start()
                 print("Temperature monitoring started.")
                 
             global email_sent, led_status
@@ -227,7 +256,7 @@ def on_message(client, userdata, message):
                 GPIO.output(LED_PIN, GPIO.HIGH)
                 if not email_sent:
                     body = f"The Light is ON at {time.strftime('%H:%M')}."
-                    send_email(body)
+                    send_email("Light Status ",body)
             else:
                 GPIO.output(LED_PIN, GPIO.LOW)
                 email_sent = False
